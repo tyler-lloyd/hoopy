@@ -1,2 +1,13 @@
 __pycache__/
 *.pyc
+*.egg-info/
+.venv/
+.pytest_cache/
+
+# Scrapy's HTTP cache and job state
+.scrapy/
+
+# Ad-hoc crawl output (data/ is tracked on purpose)
+/*.json
+/*.jsonl
+/*.csv
