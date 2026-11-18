@@ -1,61 +1,48 @@
+import string
+
 import scrapy
 
+from hoopy.parsing import BASE_URL, cell_text, clean_value, csk_date, data_rows
+
+
 class PlayerListSpider(scrapy.Spider):
-    ''' Gets all NBA players listed on basketball-reference's site '''
+    """Every player listed in basketball-reference's player index (/players/a/ ... /players/z/).
+
+    Usage::
+
+        scrapy crawl playerlist -O data/playerlist.json
+    """
 
     name = "playerlist"
 
-    start_urls = [
-        'https://www.basketball-reference.com/players/a/',
-        'https://www.basketball-reference.com/players/b/',
-        'https://www.basketball-reference.com/players/c/',
-        'https://www.basketball-reference.com/players/d/',
-        'https://www.basketball-reference.com/players/e/',
-        'https://www.basketball-reference.com/players/f/',
-        'https://www.basketball-reference.com/players/g/',
-        'https://www.basketball-reference.com/players/h/',
-        'https://www.basketball-reference.com/players/i/',
-        'https://www.basketball-reference.com/players/j/',
-        'https://www.basketball-reference.com/players/k/',
-        'https://www.basketball-reference.com/players/l/',
-        'https://www.basketball-reference.com/players/m/',
-        'https://www.basketball-reference.com/players/n/',
-        'https://www.basketball-reference.com/players/o/',
-        'https://www.basketball-reference.com/players/p/',
-        'https://www.basketball-reference.com/players/q/',
-        'https://www.basketball-reference.com/players/r/',
-        'https://www.basketball-reference.com/players/s/',
-        'https://www.basketball-reference.com/players/t/',
-        'https://www.basketball-reference.com/players/u/',
-        'https://www.basketball-reference.com/players/v/',
-        'https://www.basketball-reference.com/players/w/',
-        'https://www.basketball-reference.com/players/y/',
-        'https://www.basketball-reference.com/players/z/',
-    ]
+    async def start(self):
+        for letter in string.ascii_lowercase:
+            yield scrapy.Request(f"{BASE_URL}/players/{letter}/", callback=self.parse)
 
     def parse(self, response):
-        ''' main function for parsing the NBA player table for each page '''
-        for row in response.xpath('//table[@id="players"]/tbody/tr'):
-            player = row.xpath('th//a/text()').extract_first()
-            if row.xpath('th[@data-stat="player"]/strong/a'):
-                is_activte = True
-            else:
-                is_activte = False
+        table = response.xpath('//table[@id="players"]')
+        if not table:
+            return
+        for row in data_rows(table[0]):
+            name_cell = row.xpath('./th[@data-stat="player"]')
+            if not name_cell:
+                continue
+            name_cell = name_cell[0]
+            url = name_cell.xpath(".//a/@href").get()
+            colleges = [c.strip() for c in row.xpath('./td[@data-stat="colleges"]/a/text()').getall()]
 
-            player_url = row.xpath('th[@data-stat="player"]//a/@href').extract_first()
-            year_min = row.xpath('td[@data-stat="year_min"]/text()').extract_first()
-            year_max = row.xpath('td[@data-stat="year_max"]/text()').extract_first()
-            pos = row.xpath('td[@data-stat="pos"]/text()').extract_first()
-            birth_date = row.xpath('td[@data-stat="birth_date"]/a/text()').extract_first()
-            college = row.xpath('td[@data-stat="college_name"]/a/text()').extract_first()
-            
             yield {
-                'player': player,
-                'start_year': year_min,
-                'end_year': year_max,
-                'position': pos,
-                'birthdate': birth_date,
-                'college': college,
-                'is_active': is_activte,
-                'url': player_url
+                "player_id": name_cell.attrib.get("data-append-csv"),
+                "player": name_cell.xpath(".//a/text()").get(),
+                "start_year": clean_value(cell_text(row.xpath('./td[@data-stat="year_min"]')[0])),
+                "end_year": clean_value(cell_text(row.xpath('./td[@data-stat="year_max"]')[0])),
+                "position": clean_value(cell_text(row.xpath('./td[@data-stat="pos"]')[0])),
+                "height": clean_value(cell_text(row.xpath('./td[@data-stat="height"]')[0])),
+                "weight": clean_value(cell_text(row.xpath('./td[@data-stat="weight"]')[0])),
+                "birth_date": csk_date(row.xpath('./td[@data-stat="birth_date"]/@csk').get()),
+                "colleges": colleges,
+                # Active players are bolded in the index; Hall of Famers get a trailing '*'.
+                "is_active": bool(name_cell.xpath("./strong")),
+                "hall_of_fame": cell_text(name_cell).strip().endswith("*"),
+                "url": response.urljoin(url) if url else None,
             }

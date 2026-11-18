@@ -1,0 +1,24 @@
+[project]
+name = "hoopy"
+version = "0.2.0"
+description = "Scrapy spiders for NBA player and game stats from basketball-reference.com"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "scrapy>=2.14",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["hoopy*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
